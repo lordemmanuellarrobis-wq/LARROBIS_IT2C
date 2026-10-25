@@ -1,25 +1,38 @@
 
-import dao.DatabaseConnection;
-import ui.Menu;
+package com.scc;
+
+import dao.DatabaseInitializer;
+import dao.UserDao;
+import ui.Authentication;
 
 import java.sql.SQLException;
+import java.util.Scanner;
 
 public class Main {
 
     public static void main(String[] args) {
         try {
-            DatabaseConnection.initializeDatabase();
+            DatabaseInitializer initializer =
+                    new DatabaseInitializer();
+
+            initializer.initialize();
 
             System.out.println(
-                    "SQLite database connected successfully!"
+                    "SQLite database initialized successfully!"
             );
 
-            Menu menu = new Menu();
-            menu.start();
+            UserDao userDao = new UserDao();
+
+            try (Scanner scanner = new Scanner(System.in)) {
+                Authentication authentication =
+                        new Authentication(userDao, scanner);
+
+                authentication.start();
+            }
 
         } catch (SQLException e) {
-            System.out.println("DATABASE / APPLICATION ERROR:");
-            System.out.println(e.getMessage());
+            System.err.println("DATABASE / APPLICATION ERROR:");
+            e.printStackTrace();
         }
     }
 }
