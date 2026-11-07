@@ -1,3 +1,4 @@
+
 package dao;
 
 import java.sql.Connection;
@@ -7,13 +8,17 @@ import java.sql.Statement;
 
 public class DatabaseConnection {
 
-    private static final String URL = "jdbc:sqlite:terminalgo.db";
+    private static final String URL =
+            "jdbc:sqlite:terminalgo.db";
 
-    public static Connection getConnection() throws SQLException {
+    public static Connection getConnection()
+            throws SQLException {
 
-        Connection connection = DriverManager.getConnection(URL);
+        Connection connection =
+                DriverManager.getConnection(URL);
 
-        try (Statement statement = connection.createStatement()) {
+        try (Statement statement =
+                     connection.createStatement()) {
 
             statement.execute("PRAGMA foreign_keys = ON");
 

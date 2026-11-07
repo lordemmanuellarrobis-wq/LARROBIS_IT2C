@@ -1,3 +1,4 @@
+
 package dao;
 
 import model.User;
@@ -12,6 +13,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class UserDao {
+
+    private final ActivityLogDao activityLogDao =
+            new ActivityLogDao();
 
     // REGISTER USER
     public boolean registerUser(
@@ -29,33 +33,58 @@ public class UserDao {
             );
         }
 
-        if (usernameExists(username.trim())) {
+        username = username.trim();
+
+        if (usernameExists(username)) {
             return false;
         }
 
-        String hashedPassword = BCrypt.hashpw(
-                password,
-                BCrypt.gensalt(12)
-        );
+        String hashedPassword =
+                BCrypt.hashpw(password, BCrypt.gensalt(12));
 
         String sql = """
-                INSERT INTO users (username, password, roles, status)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO users
+                (username, password, roles, status)
+                VALUES (?, ?, ?, 'PENDING')
                 """;
 
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection =
+                     DatabaseConnection.getConnection();
 
-            statement.setString(1, username.trim());
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(1, username);
             statement.setString(2, hashedPassword);
             statement.setString(3, role.name());
-            statement.setString(
-                    4,
-                    UserRoleStatus.Status.PENDING.name()
-            );
 
-            return statement.executeUpdate() > 0;
+            if (statement.executeUpdate() > 0) {
+
+                int newUserId;
+
+                try (PreparedStatement idStatement =
+                             connection.prepareStatement(
+                                     "SELECT last_insert_rowid()"
+                             );
+                     ResultSet result =
+                             idStatement.executeQuery()) {
+
+                    result.next();
+                    newUserId = result.getInt(1);
+                }
+
+                activityLogDao.logAction(
+                        newUserId,
+                        "USER_REGISTERED",
+                        "User " + username +
+                                " registered with role " + role
+                );
+
+                return true;
+            }
         }
+
+        return false;
     }
 
     // LOGIN USER
@@ -67,7 +96,10 @@ public class UserDao {
         if (username == null || username.isBlank()
                 || password == null || password.isEmpty()) {
 
-            System.out.println("Username and password are required.");
+            System.out.println(
+                    "Username and password are required."
+            );
+
             return null;
         }
 
@@ -77,35 +109,45 @@ public class UserDao {
                 WHERE username = ?
                 """;
 
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection =
+                     DatabaseConnection.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
 
             statement.setString(1, username.trim());
 
-            try (ResultSet result = statement.executeQuery()) {
+            try (ResultSet result =
+                         statement.executeQuery()) {
 
                 if (!result.next()) {
                     System.out.println("Username not found.");
                     return null;
                 }
 
-                String storedPassword = result.getString("password");
+                String storedPassword =
+                        result.getString("password");
+
                 boolean passwordMatches = false;
 
-                if (storedPassword != null
-                        && storedPassword.startsWith("$2")) {
+                if (storedPassword != null &&
+                        storedPassword.startsWith("$2")) {
 
                     try {
                         passwordMatches =
-                                BCrypt.checkpw(password, storedPassword);
+                                BCrypt.checkpw(
+                                        password,
+                                        storedPassword
+                                );
+
                     } catch (IllegalArgumentException e) {
                         passwordMatches = false;
                     }
 
                 } else if (storedPassword != null) {
 
-                    // Compatibility with older plain-text passwords.
-                    passwordMatches = password.equals(storedPassword);
+                    passwordMatches =
+                            password.equals(storedPassword);
                 }
 
                 if (!passwordMatches) {
@@ -125,11 +167,15 @@ public class UserDao {
 
                 if (status != UserRoleStatus.Status.APPROVED) {
 
-                    if (status == UserRoleStatus.Status.REJECTED) {
+                    if (status ==
+                            UserRoleStatus.Status.REJECTED) {
+
                         System.out.println(
                                 "Your account was rejected. Contact the administrator."
                         );
+
                     } else {
+
                         System.out.println(
                                 "Your account is pending approval."
                         );
@@ -149,21 +195,26 @@ public class UserDao {
         }
     }
 
-    // CHECK IF USERNAME EXISTS
-    public boolean usernameExists(String username) throws SQLException {
+    // CHECK USERNAME
+    public boolean usernameExists(String username)
+            throws SQLException {
 
         String sql = """
-                SELECT 1
-                FROM users
+                SELECT 1 FROM users
                 WHERE username = ?
                 """;
 
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection =
+                     DatabaseConnection.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
 
             statement.setString(1, username);
 
-            try (ResultSet result = statement.executeQuery()) {
+            try (ResultSet result =
+                         statement.executeQuery()) {
+
                 return result.next();
             }
         }
@@ -179,21 +230,25 @@ public class UserDao {
         return getUsers(true);
     }
 
-    // GET USERS FROM DATABASE
-    private List<User> getUsers(boolean pendingOnly) throws SQLException {
+    // GET USERS
+    private List<User> getUsers(boolean pendingOnly)
+            throws SQLException {
 
         List<User> users = new ArrayList<>();
 
         String sql;
 
         if (pendingOnly) {
+
             sql = """
                     SELECT id, username, password, roles, status
                     FROM users
                     WHERE UPPER(status) = 'PENDING'
                     ORDER BY id
                     """;
+
         } else {
+
             sql = """
                     SELECT id, username, password, roles, status
                     FROM users
@@ -201,13 +256,18 @@ public class UserDao {
                     """;
         }
 
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql);
-             ResultSet result = statement.executeQuery()) {
+        try (Connection connection =
+                     DatabaseConnection.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql);
+
+             ResultSet result =
+                     statement.executeQuery()) {
 
             while (result.next()) {
 
-                User user = new User(
+                users.add(new User(
                         result.getInt("id"),
                         result.getString("username"),
                         result.getString("password"),
@@ -217,9 +277,7 @@ public class UserDao {
                         UserRoleStatus.parseStatus(
                                 result.getString("status")
                         )
-                );
-
-                users.add(user);
+                ));
             }
         }
 
@@ -227,7 +285,32 @@ public class UserDao {
     }
 
     // APPROVE USER
-    public boolean approveUserById(int userId) throws SQLException {
+    public boolean approveUserById(
+            int userId,
+            int adminId
+    ) throws SQLException {
+
+        boolean updated = updateUserStatusById(
+                userId,
+                UserRoleStatus.Status.APPROVED
+        );
+
+        if (updated) {
+
+            activityLogDao.logAction(
+                    adminId,
+                    "USER_APPROVED",
+                    "Admin ID " + adminId +
+                            " approved account for User ID " + userId
+            );
+        }
+
+        return updated;
+    }
+
+    // COMPATIBILITY METHOD
+    public boolean approveUserById(int userId)
+            throws SQLException {
 
         return updateUserStatusById(
                 userId,
@@ -235,17 +318,17 @@ public class UserDao {
         );
     }
 
-    // UPDATE USER ROLE AND STATUS TOGETHER
+    // UPDATE ROLE AND STATUS
     public boolean updateUserRoleAndStatusById(
             int userId,
             UserRoleStatus.Role role,
-            UserRoleStatus.Status status
+            UserRoleStatus.Status status,
+            int adminId
     ) throws SQLException {
 
         if (userId <= 0 || role == null || status == null) {
-
             throw new IllegalArgumentException(
-                    "Valid user ID, role, and status are required."
+                    "Valid User ID, role, and status are required."
             );
         }
 
@@ -255,8 +338,59 @@ public class UserDao {
                 WHERE id = ?
                 """;
 
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection =
+                     DatabaseConnection.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(1, role.name());
+            statement.setString(2, status.name());
+            statement.setInt(3, userId);
+
+            boolean updated =
+                    statement.executeUpdate() > 0;
+
+            if (updated) {
+
+                activityLogDao.logAction(
+                        adminId,
+                        "USER_UPDATED",
+                        "Admin ID " + adminId +
+                                " changed User ID " + userId +
+                                " role to " + role +
+                                " and status to " + status
+                );
+            }
+
+            return updated;
+        }
+    }
+
+    // COMPATIBILITY METHOD
+    public boolean updateUserRoleAndStatusById(
+            int userId,
+            UserRoleStatus.Role role,
+            UserRoleStatus.Status status
+    ) throws SQLException {
+
+        if (userId <= 0 || role == null || status == null) {
+            throw new IllegalArgumentException(
+                    "Valid User ID, role, and status are required."
+            );
+        }
+
+        String sql = """
+                UPDATE users
+                SET roles = ?, status = ?
+                WHERE id = ?
+                """;
+
+        try (Connection connection =
+                     DatabaseConnection.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
 
             statement.setString(1, role.name());
             statement.setString(2, status.name());
@@ -267,16 +401,14 @@ public class UserDao {
     }
 
     // UPDATE STATUS ONLY
-    // Used by the Approve User option.
     public boolean updateUserStatusById(
             int userId,
             UserRoleStatus.Status status
     ) throws SQLException {
 
         if (userId <= 0 || status == null) {
-
             throw new IllegalArgumentException(
-                    "Valid user ID and status are required."
+                    "Valid User ID and status are required."
             );
         }
 
@@ -286,8 +418,11 @@ public class UserDao {
                 WHERE id = ?
                 """;
 
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection =
+                     DatabaseConnection.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
 
             statement.setString(1, status.name());
             statement.setInt(2, userId);
@@ -297,7 +432,10 @@ public class UserDao {
     }
 
     // DELETE USER
-    public boolean deleteUserById(int userId) throws SQLException {
+    public boolean deleteUserById(
+            int userId,
+            int adminId
+    ) throws SQLException {
 
         if (userId <= 0) {
             throw new IllegalArgumentException(
@@ -310,8 +448,45 @@ public class UserDao {
                 WHERE id = ?
                 """;
 
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection =
+                     DatabaseConnection.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setInt(1, userId);
+
+            boolean deleted =
+                    statement.executeUpdate() > 0;
+
+            if (deleted) {
+
+                activityLogDao.logAction(
+                        adminId,
+                        "USER_DELETED",
+                        "Admin ID " + adminId +
+                                " deleted User ID " + userId
+                );
+            }
+
+            return deleted;
+        }
+    }
+
+    // COMPATIBILITY METHOD
+    public boolean deleteUserById(int userId)
+            throws SQLException {
+
+        String sql = """
+                DELETE FROM users
+                WHERE id = ?
+                """;
+
+        try (Connection connection =
+                     DatabaseConnection.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
 
             statement.setInt(1, userId);
 

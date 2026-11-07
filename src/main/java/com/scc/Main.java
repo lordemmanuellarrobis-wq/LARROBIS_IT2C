@@ -1,3 +1,4 @@
+
 package com.scc;
 
 import dao.DatabaseInitializer;
@@ -13,20 +14,17 @@ public class Main {
 
         try {
 
-            // INITIALIZE DATABASE FIRST
             DatabaseInitializer initializer =
                     new DatabaseInitializer();
 
             initializer.initialize();
 
             System.out.println(
-                    "Database initialized successfully!"
+                    "\nDatabase initialized successfully!"
             );
 
-            // CREATE USER DAO
             UserDao userDao = new UserDao();
 
-            // START AUTHENTICATION
             try (Scanner scanner = new Scanner(System.in)) {
 
                 Authentication authentication =
@@ -38,10 +36,12 @@ public class Main {
         } catch (SQLException e) {
 
             System.out.println(
-                    "Application database error:"
+                    "Application database error: " +
+                            e.getMessage()
             );
 
             e.printStackTrace();
         }
     }
 }
+
