@@ -1,4 +1,3 @@
-
 package com.scc;
 
 import dao.DatabaseInitializer;
@@ -11,19 +10,25 @@ import java.util.Scanner;
 public class Main {
 
     public static void main(String[] args) {
+
         try {
+
+            // INITIALIZE DATABASE FIRST
             DatabaseInitializer initializer =
                     new DatabaseInitializer();
 
             initializer.initialize();
 
             System.out.println(
-                    "SQLite database initialized successfully!"
+                    "Database initialized successfully!"
             );
 
+            // CREATE USER DAO
             UserDao userDao = new UserDao();
 
+            // START AUTHENTICATION
             try (Scanner scanner = new Scanner(System.in)) {
+
                 Authentication authentication =
                         new Authentication(userDao, scanner);
 
@@ -31,7 +36,11 @@ public class Main {
             }
 
         } catch (SQLException e) {
-            System.err.println("DATABASE / APPLICATION ERROR:");
+
+            System.out.println(
+                    "Application database error:"
+            );
+
             e.printStackTrace();
         }
     }
